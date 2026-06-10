@@ -94,7 +94,7 @@ async def team_data(team_id: int) -> dict:
     away_fixes = [f for f in fixes if f["teams"]["away"]["id"] == team_id and f["scores"]["home"] is not None]
 
     def calc(fix_list, is_home_loc):
-        gf_l, ga_l, h1_l, h2_l = [], [], [], []
+        gf_l, ga_l, h1_l = [], [], []
         results_fmt = []
         for fix in fix_list[:6]:
             is_h = fix["teams"]["home"]["id"] == team_id
@@ -103,7 +103,6 @@ async def team_data(team_id: int) -> dict:
             gf_l.append(sh if is_h else sa)
             ga_l.append(sa if is_h else sh)
 
-            # Half time scores
             ht = fix.get("periods", {})
             h1_home = ht.get("first", {}).get("home")
             h1_away = ht.get("first", {}).get("away")
@@ -131,38 +130,38 @@ async def build_real_data(home_name: str, away_name: str) -> dict:
     at = await find_team(away_name)
     api_ok = ht is not None or at is not None
 
-    result = {
+    match_data = {
         "home_team": ht, "away_team": at,
         "home_data": None, "away_data": None,
         "h2h": [], "api_ok": api_ok, "source": "API-Sports Handball"
     }
 
     if ht:
-        result["home_data"] = await team_data(ht["id"])
+        match_data["home_data"] = await team_data(ht["id"])
     if at:
-        result["away_data"] = await team_data(at["id"])
+        match_data["away_data"] = await team_data(at["id"])
     if ht and at:
-        result["h2h"] = await get_h2h(ht["id"], at["id"])
+        match_data["h2h"] = await get_h2h(ht["id"], at["id"])
 
     if not api_ok:
-        result["source"] = "Búsqueda web"
-    return result
+        match_data["source"] = "Búsqueda web"
+    return match_data
 
 def nd(val):
     return str(val) if val is not None else None
 
-def build_prompt(home: str, away: str, conditions: list[dict], data: dict) -> str:
+def build_prompt(home: str, away: str, conditions: list[dict], match_data: dict) -> str:
     now = datetime.now().strftime("%d/%m/%Y")
     max_pts = sum(c["weight"] for c in conditions)
-    hd = data.get("home_data") or {}
-    ad = data.get("away_data") or {}
+    hd = match_data.get("home_data") or {}
+    ad = match_data.get("away_data") or {}
 
     blocks = [f"=== DATOS REALES BALONMANO ({now}) ===\n"]
 
-    if data.get("home_data"):
-        hn = data["home_team"]["name"]
-        home_res = " ".join([fmt_result(f, data["home_team"]["id"]) for f in hd["home"]["fixes"] if fmt_result(f, data["home_team"]["id"])])
-        away_res = " ".join([fmt_result(f, data["home_team"]["id"]) for f in hd["away"]["fixes"] if fmt_result(f, data["home_team"]["id"])])
+    if match_data.get("home_data"):
+        hn = match_data["home_team"]["name"]
+        home_res = " ".join([fmt_result(f, match_data["home_team"]["id"]) for f in hd["home"]["fixes"] if fmt_result(f, match_data["home_team"]["id"])])
+        away_res = " ".join([fmt_result(f, match_data["home_team"]["id"]) for f in hd["away"]["fixes"] if fmt_result(f, match_data["home_team"]["id"])])
         h1_str = f" | Media 1ªP: {nd(hd['home']['h1_avg'])}" if hd["home"].get("h1_avg") else ""
         blocks.append(
             f"🔵 {hn.upper()}\n"
@@ -172,10 +171,10 @@ def build_prompt(home: str, away: str, conditions: list[dict], data: dict) -> st
     else:
         blocks.append(f"🔵 {home.upper()} — Sin datos en API")
 
-    if data.get("away_data"):
-        an = data["away_team"]["name"]
-        home_res = " ".join([fmt_result(f, data["away_team"]["id"]) for f in ad["home"]["fixes"] if fmt_result(f, data["away_team"]["id"])])
-        away_res = " ".join([fmt_result(f, data["away_team"]["id"]) for f in ad["away"]["fixes"] if fmt_result(f, data["away_team"]["id"])])
+    if match_data.get("away_data"):
+        an = match_data["away_team"]["name"]
+        home_res = " ".join([fmt_result(f, match_data["away_team"]["id"]) for f in ad["home"]["fixes"] if fmt_result(f, match_data["away_team"]["id"])])
+        away_res = " ".join([fmt_result(f, match_data["away_team"]["id"]) for f in ad["away"]["fixes"] if fmt_result(f, match_data["away_team"]["id"])])
         h1_str = f" | Media 1ªP: {nd(ad['away']['h1_avg'])}" if ad["away"].get("h1_avg") else ""
         blocks.append(
             f"\n🔴 {an.upper()}\n"
@@ -185,9 +184,9 @@ def build_prompt(home: str, away: str, conditions: list[dict], data: dict) -> st
     else:
         blocks.append(f"\n🔴 {away.upper()} — Sin datos en API")
 
-    if data.get("h2h"):
+    if match_data.get("h2h"):
         h2h_lines = []
-        for fix in data["h2h"][:3]:
+        for fix in match_data["h2h"][:3]:
             d = fix["date"][:10] if fix.get("date") else "?"
             sh = fix["scores"]["home"]
             sa = fix["scores"]["away"]
@@ -198,7 +197,7 @@ def build_prompt(home: str, away: str, conditions: list[dict], data: dict) -> st
 
     data_str = "\n".join(blocks)
 
-    web_instruction = "" if data["api_ok"] else f"""
+    web_instruction = "" if match_data["api_ok"] else f"""
 Sin datos en API. Usa web_search:
 1. "sofascore {home} balonmano resultados 2026"
 2. "sofascore {away} balonmano resultados 2026"
@@ -206,7 +205,7 @@ Sin datos en API. Usa web_search:
 """
 
     cond_list = "\n".join(f'• {c["label"]} (peso {c["weight"]})' for c in conditions)
-    confidence = "⚠️ DATOS NO VERIFICADOS — " if not data["api_ok"] else ""
+    confidence = "⚠️ DATOS NO VERIFICADOS — " if not match_data["api_ok"] else ""
 
     return f"""Analista deportivo experto en balonmano. Análisis BREVE para Telegram. Máximo 1800 caracteres.
 
@@ -240,17 +239,17 @@ Goles fuera: X marc / X enc | Media 1ªP: X
 🟢 FAVORABLE / 🟡 DUDOSO / 🔴 NO RECOMENDABLE
 
 🤾 [1 frase conclusión]
-📡 _{data.get("source", "API-Sports")} · {now}_"""
+📡 _{match_data.get("source", "API-Sports")} · {now}_"""
 
 
 async def analyze_match(home: str, away: str, conditions: list[dict] | None = None) -> str:
     if conditions is None:
         conditions = DEFAULT_CONDITIONS
 
-    data = await build_real_data(home, away)
-    logger.info(f"Handball API ok={data['api_ok']} for {home} vs {away}")
+    match_data = await build_real_data(home, away)
+    logger.info(f"Handball API ok={match_data['api_ok']} for {home} vs {away}")
 
-    prompt = build_prompt(home, away, conditions, data)
+    prompt = build_prompt(home, away, conditions, match_data)
 
     headers = {
         "x-api-key": ANTHROPIC_API_KEY,
@@ -274,10 +273,10 @@ async def analyze_match(home: str, away: str, conditions: list[dict] | None = No
         async with httpx.AsyncClient(timeout=120) as client:
             r = await client.post(ANTHROPIC_URL, headers=headers, json=body)
             r.raise_for_status()
-            data_r = r.json()
+            response = r.json()
             text_parts = [
                 block["text"]
-                for block in data_r.get("content", [])
+                for block in response.get("content", [])
                 if block.get("type") == "text"
             ]
             return "\n".join(text_parts) if text_parts else "❌ No se pudo generar el análisis."
