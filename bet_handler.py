@@ -12,7 +12,7 @@ import re
 import os
 from database import add_bet, update_bet_result, get_bets, get_stats, get_bet_by_id
 
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL_HANDBALL", "")
 
 RESULT_MAP = {
     "ganó": "won", "gano": "won", "won": "won", "win": "won", "✅": "won",
@@ -23,7 +23,7 @@ RESULT_MAP = {
 
 def parse_bet(text: str) -> dict | None:
     """
-    Parse: /apuesta Real Madrid vs Barça · +2.5 goles · 1.75 · 10
+    Parse: /apuesta Barcelona vs Kiel · +55.5 goles · 1.75 · 10
     Returns dict or None if invalid.
     """
     text = text.replace("/apuesta", "").strip()
@@ -70,7 +70,7 @@ async def handle_bet_command(chat_id, text: str, send_fn) -> bool:
             await send_fn(chat_id,
                 "❌ Formato incorrecto. Usa:\n"
                 "`/apuesta Partido ; Mercado ; Cuota ; Importe`\n\n"
-                "Ejemplo:\n`/apuesta Real Madrid vs Barça ; +2.5 goles ; 1.75 ; 10`"
+                "Ejemplo:\n`/apuesta Barcelona vs Kiel ; +55.5 goles ; 1.75 ; 10`"
             )
             return True
         bet_id = add_bet(
@@ -79,6 +79,7 @@ async def handle_bet_command(chat_id, text: str, send_fn) -> bool:
             market=bet["market"],
             odds=bet["odds"],
             stake=bet["stake"],
+            sport="handball",
         )
         odds_str = f" ; cuota {bet['odds']}" if bet["odds"] else ""
         stake_str = f" ; {bet['stake']}€" if bet["stake"] else ""
@@ -128,7 +129,7 @@ async def handle_bet_command(chat_id, text: str, send_fn) -> bool:
 
     # /stats
     if text.lower().startswith("/stats"):
-        s = get_stats(str(chat_id))
+        s = get_stats(str(chat_id), sport="handball")
         total = s["won"] + s["lost"]
         profit_sign = "+" if s["total_profit"] >= 0 else ""
         roi_sign = "+" if s["roi"] >= 0 else ""
@@ -136,7 +137,7 @@ async def handle_bet_command(chat_id, text: str, send_fn) -> bool:
         bar = "█" * bar_filled + "░" * (10 - bar_filled)
 
         await send_fn(chat_id,
-            f"📊 *Tus estadísticas*\n\n"
+            f"📊 *Tus estadísticas — Balonmano* 🤾\n\n"
             f"Total apuestas: {s['total_bets']} ({s['pending']} pendientes)\n"
             f"✅ Ganadas: {s['won']} · ❌ Perdidas: {s['lost']} · ➖ Nulas: {s['void']}\n\n"
             f"Tasa de acierto: [{bar}] {s['win_rate']}%\n"
@@ -151,12 +152,13 @@ async def handle_bet_command(chat_id, text: str, send_fn) -> bool:
     if text.lower().startswith("/apuestas"):
         only_pending = "pendiente" in text.lower()
         bets = get_bets(str(chat_id), limit=10,
-                        result_filter="pending" if only_pending else None)
+                        result_filter="pending" if only_pending else None,
+                        sport="handball")
         if not bets:
-            await send_fn(chat_id, "No tienes apuestas registradas aún.")
+            await send_fn(chat_id, "No tienes apuestas de balonmano registradas aún.")
             return True
 
-        lines = [f"📋 *Últimas {'pendientes' if only_pending else 'apuestas'}*\n"]
+        lines = [f"📋 *Últimas {'pendientes' if only_pending else 'apuestas'} — Balonmano* 🤾\n"]
         for b in bets:
             emoji = fmt_result_emoji(b["result"])
             odds_str = f" @{b['odds']}" if b["odds"] else ""
@@ -172,7 +174,7 @@ async def handle_bet_command(chat_id, text: str, send_fn) -> bool:
     # /web
     if text.lower().startswith("/web"):
         await send_fn(chat_id,
-            f"🌐 *Dashboard de apuestas*\n{WEBHOOK_URL}/dashboard"
+            f"🌐 *Dashboard de apuestas — Balonmano*\n{WEBHOOK_URL}/dashboard"
         )
         return True
 
