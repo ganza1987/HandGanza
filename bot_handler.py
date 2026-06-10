@@ -5,7 +5,6 @@ import httpx
 from analyzer import analyze_match
 from bet_handler import handle_bet_command
 from image_bet_handler import process_bet_screenshot
-from scheduler import send_daily_handball_analysis
 
 logger = logging.getLogger(__name__)
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN_HANDBALL", "")
@@ -67,6 +66,7 @@ async def handle_update(data: dict):
     if text.lower().startswith("/handball"):
         await send_message(chat_id,
             "🤾 *Lanzando análisis diario de balonmano...*\n_Esto puede tardar varios minutos._")
+        from scheduler import send_daily_handball_analysis
         await send_daily_handball_analysis()
         return
 
