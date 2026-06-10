@@ -5,9 +5,9 @@ import httpx
 from analyzer import analyze_match
 from bet_handler import handle_bet_command
 from image_bet_handler import process_bet_screenshot
+from scheduler import send_daily_handball_analysis
 
 logger = logging.getLogger(__name__)
-
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN_HANDBALL", "")
 TELEGRAM_API   = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
@@ -47,7 +47,6 @@ async def handle_update(data: dict):
     message = data.get("message") or data.get("edited_message")
     if not message:
         return
-
     chat_id = message["chat"]["id"]
 
     if message.get("photo"):
@@ -62,6 +61,13 @@ async def handle_update(data: dict):
 
     if text.startswith("/start") or text.startswith("/help"):
         await send_message(chat_id, HELP_TEXT)
+        return
+
+    # Trigger manual del análisis diario
+    if text.lower().startswith("/handball"):
+        await send_message(chat_id,
+            "🤾 *Lanzando análisis diario de balonmano...*\n_Esto puede tardar varios minutos._")
+        await send_daily_handball_analysis()
         return
 
     handled = await handle_bet_command(chat_id, text, send_message)
@@ -92,6 +98,9 @@ HELP_TEXT = """
 *Análisis de partidos:*
 Escribe el partido: `Barcelona vs THW Kiel`
 
+*Análisis diario manual:*
+/handball — lanza el análisis de hoy
+
 *Apuestas:*
 📸 Envía una captura de tu apuesta
 `/apuesta Partido ; Mercado ; Cuota ; Importe`
@@ -99,6 +108,5 @@ Escribe el partido: `Barcelona vs THW Kiel`
 `/apuestas` — últimas apuestas
 `/stats` — tus estadísticas
 /web — dashboard web
-
 /help — esta ayuda
 """.strip()
