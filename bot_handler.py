@@ -2,7 +2,7 @@ import os
 import re
 import logging
 import httpx
-from analyzer import analyze_match
+from analyzer import analyze_match, apih
 from bet_handler import handle_bet_command
 from image_bet_handler import process_bet_screenshot
 
@@ -70,6 +70,28 @@ async def handle_update(data: dict):
         await send_daily_handball_analysis()
         return
 
+    # Lista de ligas disponibles en la API
+    if text.lower().startswith("/ligas"):
+        await send_typing(chat_id)
+        try:
+            data = await apih("leagues", {})
+            leagues = data.get("response", [])
+            if not leagues:
+                await send_message(chat_id, "❌ No se pudieron obtener las ligas.")
+                return
+            lines = ["🏆 *Ligas disponibles en API-Sports Handball*\n"]
+            for lg in sorted(leagues, key=lambda x: x["id"]):
+                country = lg.get("country", {}).get("name", "")
+                name = lg.get("name", "")
+                lid = lg.get("id", "")
+                lines.append(f"`{lid}` — {name} ({country})")
+            for chunk in split_message("\n".join(lines)):
+                await send_message(chat_id, chunk)
+        except Exception as e:
+            logger.error(f"/ligas error: {e}")
+            await send_message(chat_id, "❌ Error al obtener las ligas.")
+        return
+
     handled = await handle_bet_command(chat_id, text, send_message)
     if handled:
         return
@@ -98,8 +120,9 @@ HELP_TEXT = """
 *Análisis de partidos:*
 Escribe el partido: `Barcelona vs THW Kiel`
 
-*Análisis diario manual:*
+*Comandos:*
 /handball — lanza el análisis de hoy
+/ligas — ligas disponibles en la API
 
 *Apuestas:*
 📸 Envía una captura de tu apuesta
