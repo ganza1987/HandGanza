@@ -74,7 +74,7 @@ async def handle_update(data: dict):
     if text.lower().startswith("/ligas"):
         await send_typing(chat_id)
         try:
-            data = await apih("leagues", {})
+            data = await apih("leagues", {"season": 2026})
             leagues = data.get("response", [])
             if not leagues:
                 await send_message(chat_id, "❌ No se pudieron obtener las ligas.")
