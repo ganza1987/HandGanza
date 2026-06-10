@@ -6,7 +6,8 @@ import os
 import asyncio
 import logging
 import httpx
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, date
+from zoneinfo import ZoneInfo
 from analyzer import analyze_match
 from bot_handler import send_message, split_message
 
@@ -26,26 +27,20 @@ HANDBALL_LEAGUES = {
     13:  "Liga danesa",
     14:  "Liga noruega",
     15:  "Liga sueca",
-    44:  "Mundial masculino",
-    45:  "Europeo masculino",
 }
 
-SEND_HOUR_SPAIN = 9  # 9:00 AM para balonmano
+SEND_HOUR_SPAIN = 9  # 9:00 AM hora España
 
 def get_notify_chat_ids() -> list[str]:
     if not CHAT_IDS_ENV:
         return []
     return [c.strip() for c in CHAT_IDS_ENV.split(",") if c.strip()]
 
-def spain_offset() -> int:
-    now = datetime.now(timezone.utc)
-    year = now.year
-    dst_start = datetime(year, 3, 31, 1, 0, tzinfo=timezone.utc)
-    dst_end   = datetime(year, 10, 27, 1, 0, tzinfo=timezone.utc)
-    return 2 if dst_start <= now < dst_end else 1
-
 def to_utc_hour(spain_hour: int) -> int:
-    return spain_hour - spain_offset()
+    spain_tz = ZoneInfo("Europe/Madrid")
+    today = date.today()
+    spain_dt = datetime(today.year, today.month, today.day, spain_hour, 0, tzinfo=spain_tz)
+    return spain_dt.astimezone(timezone.utc).hour
 
 async def apih(endpoint: str, params: dict) -> dict:
     headers = {
@@ -79,8 +74,8 @@ async def send_daily_handball_analysis():
         for g in games:
             home = g["teams"]["home"]["name"]
             away = g["teams"]["away"]["name"]
-            date = g.get("date", "")
-            all_games.append({"home": home, "away": away, "league": league_name, "date": date})
+            date_str = g.get("date", "")
+            all_games.append({"home": home, "away": away, "league": league_name, "date": date_str})
         await asyncio.sleep(0.5)
 
     today_str = datetime.now(timezone.utc).strftime("%d/%m/%Y")
@@ -105,7 +100,7 @@ async def send_daily_handball_analysis():
                     await send_message(chat_id, chunk)
                     await asyncio.sleep(0.3)
         except Exception as e:
-            logger.error(f"Error: {e}")
+            logger.error(f"Error analizando {g['home']} vs {g['away']}: {e}")
         await asyncio.sleep(3)
 
     for chat_id in chat_ids:
