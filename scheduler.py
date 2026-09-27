@@ -1,13 +1,19 @@
 """
-Scheduler for handball bot.
-Sends daily analysis for major handball leagues.
+Envia el analisis diario de balonmano por Telegram, ahora corrido desde
+GitHub Actions (ver .github/workflows/analisis-diario.yml y
+run_analisis_diario.py) en vez de con el `while True` que habia aqui antes.
+
+Ese bucle interno (asyncio.sleep(60) sin parar) mantenia la app de Render
+despierta 24/7, igual que le paso a BaloncestoGanza y a FutGanza, y fue lo
+que agoto las 750h/mes gratis compartidas entre las tres apps (ver memoria
+del proyecto). Se quita aqui por el mismo motivo que alli: enviar el
+mensaje solo necesita la API de Telegram, no que la app este despierta.
 """
 import os
 import asyncio
 import logging
 import httpx
-from datetime import datetime, timezone, date
-from zoneinfo import ZoneInfo
+from datetime import date, datetime, timezone
 from analyzer import analyze_match
 from bot_handler import send_message, split_message
 
@@ -29,18 +35,30 @@ HANDBALL_LEAGUES = {
     15:  "Liga sueca",
 }
 
-SEND_HOUR_SPAIN = 9  # 9:00 AM hora España
-
 def get_notify_chat_ids() -> list[str]:
     if not CHAT_IDS_ENV:
         return []
     return [c.strip() for c in CHAT_IDS_ENV.split(",") if c.strip()]
 
-def to_utc_hour(spain_hour: int) -> int:
-    spain_tz = ZoneInfo("Europe/Madrid")
-    today = date.today()
-    spain_dt = datetime(today.year, today.month, today.day, spain_hour, 0, tzinfo=spain_tz)
-    return spain_dt.astimezone(timezone.utc).hour
+
+def temporada_actual_balonmano() -> int:
+    """
+    Temporada de balonmano en curso, como numero de ANO EN QUE EMPIEZA (las
+    ligas europeas de balonmano -- ASOBAL, Bundesliga, Starligue, EHF...--
+    arrancan en agosto/septiembre y terminan en primavera/verano siguiente,
+    igual que Euroliga/Eurocup/NBL1 en baloncesto). Misma formula ya
+    verificada contra la API real para esas ligas de baloncesto (ver
+    basketball_api.temporada_actual en el repo BaloncestoGanza).
+
+    OJO: para balonmano esto NO se ha podido verificar contra la API real
+    todavia (la clave de prueba usada tenia la cuenta suspendida en
+    api-football.com al escribir esto, 2026-09-27) -- antes de fiarse del
+    todo del aviso automatico, comprobar que get_todays_games devuelve
+    partidos reales de hoy con una clave que funcione.
+    """
+    hoy = date.today()
+    return hoy.year if hoy.month >= 8 else hoy.year - 1
+
 
 async def apih(endpoint: str, params: dict) -> dict:
     headers = {
@@ -66,7 +84,7 @@ async def send_daily_handball_analysis():
     if not chat_ids:
         return
 
-    season = datetime.now(timezone.utc).year
+    season = temporada_actual_balonmano()
     all_games = []
 
     for league_id, league_name in HANDBALL_LEAGUES.items():
@@ -106,22 +124,3 @@ async def send_daily_handball_analysis():
     for chat_id in chat_ids:
         await send_message(chat_id,
             f"✅ *Balonmano — {len(all_games)} análisis completados*")
-
-async def start_scheduler():
-    logger.info("Handball scheduler started.")
-    already_sent: set[str] = set()
-
-    while True:
-        try:
-            now_utc = datetime.now(timezone.utc)
-            today_key = now_utc.strftime("%Y-%m-%d")
-            key = f"handball_{today_key}"
-
-            if now_utc.hour == to_utc_hour(SEND_HOUR_SPAIN) and now_utc.minute < 10:
-                if key not in already_sent:
-                    already_sent.add(key)
-                    await send_daily_handball_analysis()
-        except Exception as e:
-            logger.error(f"Scheduler error: {e}")
-
-        await asyncio.sleep(60)

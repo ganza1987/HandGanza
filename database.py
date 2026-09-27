@@ -32,6 +32,44 @@ def get_conn():
         return conn
 
 
+def reservar_aviso(tipo: str, fecha: str) -> bool:
+    """
+    Reserva "el aviso `tipo` del dia `fecha`" (fecha en hora de Madrid). True si
+    esta ejecucion es la primera en reservarlo (y debe hacerlo); False si otra ya
+    lo hizo. Permite que el analisis diario programado en GitHub Actions (ver
+    run_analisis_diario.py) acepte una VENTANA de horas (GitHub a veces retrasa
+    el cron, o directamente no lo dispara ningun dia) sin duplicar avisos.
+    La tabla avisos_enviados ya existe en esta misma base de datos (creada por
+    migracion para FutGanza, que comparte DATABASE_URL con HandGanza -- ver
+    database.py de FutGanza); aqui se reserva con tipo="handball" para no
+    chocar con los tipos "manana"/"mediodia" que usa FutGanza. Solo Postgres.
+    """
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO avisos_enviados (tipo, fecha) VALUES (%s, %s) "
+            "ON CONFLICT (tipo, fecha) DO NOTHING RETURNING tipo",
+            (tipo, fecha),
+        )
+        reservado = cur.fetchone() is not None
+        conn.commit()
+        return reservado
+    finally:
+        conn.close()
+
+
+def liberar_aviso(tipo: str, fecha: str) -> None:
+    """Deshace reservar_aviso si el envio fallo, para que la siguiente ejecucion lo reintente."""
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM avisos_enviados WHERE tipo=%s AND fecha=%s", (tipo, fecha))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def init_db():
     conn = get_conn()
     cur = conn.cursor()

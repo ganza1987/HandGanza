@@ -1,11 +1,9 @@
 import os
 import logging
-import asyncio
 from fastapi import FastAPI, Request
 from contextlib import asynccontextmanager
 import httpx
 from bot_handler import handle_update
-from scheduler import start_scheduler
 from database import init_db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -26,9 +24,12 @@ async def set_webhook():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # El analisis diario ya no se envia desde aqui (ver scheduler.py):
+    # el bucle interno que habia mantenia la app despierta 24/7 y gastaba
+    # las horas gratis de Render. Ahora lo dispara GitHub Actions -- ver
+    # .github/workflows/analisis-diario.yml y run_analisis_diario.py.
     init_db()
     await set_webhook()
-    asyncio.create_task(start_scheduler())
     yield
 
 app = FastAPI(lifespan=lifespan)

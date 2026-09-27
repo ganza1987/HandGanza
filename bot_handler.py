@@ -15,12 +15,23 @@ VS_PATTERN = re.compile(
     re.IGNORECASE | re.UNICODE
 )
 
-async def send_message(chat_id, text: str, parse_mode: str = "Markdown"):
+# Contador de envios rechazados por Telegram durante este proceso. run_analisis_diario.py
+# lo mira al terminar -- igual que en BaloncestoGanza/FutGanza -- para que un fallo de
+# Telegram (token o chat_id incorrectos) haga fallar la ejecucion de GitHub Actions en
+# vez de quedar en verde sin haber avisado.
+envios_fallidos = 0
+
+
+async def send_message(chat_id, text: str, parse_mode: str = "Markdown") -> bool:
+    global envios_fallidos
     async with httpx.AsyncClient(timeout=30) as client:
         payload = {"chat_id": chat_id, "text": text, "parse_mode": parse_mode}
         r = await client.post(f"{TELEGRAM_API}/sendMessage", json=payload)
         if r.status_code != 200:
             logger.error(f"Telegram error: {r.text}")
+            envios_fallidos += 1
+            return False
+        return True
 
 async def send_typing(chat_id):
     async with httpx.AsyncClient(timeout=10) as client:
