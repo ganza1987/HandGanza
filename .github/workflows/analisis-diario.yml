@@ -12,12 +12,16 @@ name: Analisis diario HandGanza
 # acepta cualquier hora entre las 9 y las 18 en Madrid con reserva diaria en
 # la base de datos (sin duplicar). Si un dia ningun intento programado
 # llega a ejecutarse, lanzar el workflow a mano (Run workflow).
+# DESACTIVADO el disparo automatico (2026-09-28): HandGanza sigue
+# suspendido a la espera de que el usuario decida lanzarlo, y los 4
+# secretos de abajo (DATABASE_URL, APIFOOTBALL_KEY, TELEGRAM_TOKEN_HANDBALL,
+# NOTIFY_CHAT_IDS) todavia no estan en este repo -- sin ellos, cada disparo
+# programado fallaba en rojo y mandaba un correo de aviso 4 veces al dia sin
+# que nadie fuera a arreglarlo. Cuando el usuario decida lanzarlo: anadir
+# los 4 secretos (Settings > Secrets > Actions) y volver a poner aqui el
+# bloque "schedule:" (ver el historial de este archivo, commit 14135d5).
+# Mientras tanto, "Run workflow" sigue disponible para probarlo a mano.
 on:
-  schedule:
-    - cron: '17 7 * * *'
-    - cron: '47 7 * * *'
-    - cron: '17 8 * * *'
-    - cron: '47 8 * * *'
   workflow_dispatch:
 
 concurrency:
