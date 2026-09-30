@@ -23,16 +23,33 @@ CHAT_IDS_ENV    = os.getenv("NOTIFY_CHAT_IDS", "")
 APIFOOTBALL_KEY = os.getenv("APIFOOTBALL_KEY", "888285a75737af52283245495c97c67a")
 APIHANDBALL_URL = "https://v1.handball.api-sports.io"
 
+# IDs REALES, comprobados contra la API el 2026-09-30 (la misma cuenta de
+# api-sports.io que usa BaloncestoGanza tambien da acceso -- Free -- a
+# balonmano). Los que habia antes eran todos incorrectos: el id=10, por
+# ejemplo, no es ASOBAL sino la liga croata "Premijer liga". Verificado
+# pidiendo /teams de cada id y comprobando que salen clubes reales de ese
+# pais (Aalborg/GOG en Dinamarca, Elverum en Noruega, Kristianstad en
+# Suecia...). "EHF Cup" (antes id=3) se quita: el id real (179) no tiene
+# NINGUNA temporada con datos, ni pasadas ni actual -- la competicion
+# parece descontinuada o fusionada con la EHF European League.
+#
+# OJO, esto NO arregla que el analisis diario pueda funcionar de verdad
+# todavia: el plan Free de balonmano de esta cuenta SOLO da acceso a las
+# temporadas 2022-2024 ("Free plans do not have access to this season, try
+# from 2022 to 2024" -- error real de la API), no a la temporada en curso
+# (2026). Sin subir de plan (Pro, 19$/mes, es lo que desbloqueo la
+# temporada actual tambien para baloncesto -- ver api-sports.io/pricing),
+# get_todays_games() de mas abajo fallara siempre para la temporada de
+# hoy. Decision del usuario, no tecnica.
 HANDBALL_LEAGUES = {
-    1:   "EHF Champions League",
-    2:   "EHF European League",
-    3:   "EHF Cup",
-    10:  "Liga ASOBAL (España)",
-    11:  "Bundesliga (Alemania)",
-    12:  "Starligue (Francia)",
-    13:  "Liga danesa",
-    14:  "Liga noruega",
-    15:  "Liga sueca",
+    131: "EHF Champions League",
+    145: "EHF European League",
+    103: "Liga ASOBAL (España)",
+    39:  "Bundesliga (Alemania)",
+    34:  "Starligue (Francia)",
+    23:  "Liga danesa (Herre Handbold Ligaen)",
+    75:  "Liga noruega (REMA 1000-ligaen)",
+    113: "Liga sueca (Handbollsligan)",
 }
 
 def get_notify_chat_ids() -> list[str]:
